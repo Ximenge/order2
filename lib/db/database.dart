@@ -150,4 +150,10 @@ class AppDatabase {
     final db = await instance.database;
     await db.delete('orders', where: 'isDeleted = 1');
   }
+
+  // 添加 physicalDeleteOrder 方法
+  Future<void> physicalDeleteOrder(Order order) async {
+    final db = await instance.database;
+    await db.delete('orders', where: 'id = ?', whereArgs: [order.id]);
+  }
 }

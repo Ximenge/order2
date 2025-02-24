@@ -13,11 +13,13 @@ class CustomerOrdersScreen extends StatefulWidget {
 class _CustomerOrdersScreenState extends State<CustomerOrdersScreen> {
   String? selectedCustomerName;
   ValueNotifier<bool>? _refreshNotifier;
+  List<Order> _orders = [];
 
   @override
   void initState() {
     super.initState();
     _refreshNotifier = ValueNotifier(false);
+    _loadOrders();
   }
 
   @override
@@ -26,90 +28,55 @@ class _CustomerOrdersScreenState extends State<CustomerOrdersScreen> {
     super.dispose();
   }
 
+  Future<void> _loadOrders() async {
+    try {
+      List<Order> newOrders = selectedCustomerName == null
+         ? await Provider.of<AppDatabase>(context, listen: false).getActiveOrders()
+          : await Provider.of<AppDatabase>(context, listen: false).getOrdersByCustomer(selectedCustomerName!);
+      setState(() {
+        _orders = newOrders;
+      });
+    } catch (e) {
+      // 可以添加详细的错误处理逻辑
+      print('加载订单信息出错: $e');
+    }
+  }
+
+  void _deleteOrderLocally(Order order) {
+    setState(() {
+      _orders.removeWhere((o) => o.id == order.id);
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('客户订货信息'),
+        title: const Text('客户订货信息'),
       ),
-      body: Column(
+      body: Row(
         children: [
-          // 客户姓名筛选按钮
-          FutureBuilder<List<String>>(
-            future: Provider.of<AppDatabase>(context).getAllCustomerNames(),
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return CircularProgressIndicator();
-              }
-
-              if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                return Text('暂无客户信息');
-              }
-
-              final customerNames = snapshot.data!;
-              return SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: [
-                    ElevatedButton(
-                      onPressed: () {
-                        setState(() {
-                          selectedCustomerName = null;
-                        });
-                      },
-                      child: Text('全部'),
-                    ),
-                    ...customerNames.map((name) => ElevatedButton(
-                      onPressed: selectedCustomerName == name ? null : () {
-                        setState(() {
-                          selectedCustomerName = name;
-                        });
-                      },
-                      child: Text(name),
-                      style: ButtonStyle(
-                        backgroundColor: MaterialStateProperty.resolveWith(
-                          (states) => selectedCustomerName == name ? Colors.blue : Colors.grey,
-                        ),
-                      ),
-                    )),
-                  ],
-                ),
-              );
-            },
-          ),
-          SizedBox(height: 16),
-          // 订单列表
+          // 左侧客户列表
           Expanded(
-            child: ValueListenableBuilder(
-              valueListenable: _refreshNotifier!,
-              builder: (context, _, __) {
-                return FutureBuilder<List<Order>>(
-                  future: selectedCustomerName == null
-                      ? Provider.of<AppDatabase>(context, listen: false).getActiveOrders()
-                      : Provider.of<AppDatabase>(context, listen: false).getOrdersByCustomer(selectedCustomerName!),
-                  builder: (context, snapshot) {
-                    if (snapshot.connectionState == ConnectionState.waiting) {
-                      return Center(child: CircularProgressIndicator());
-                    }
-
-                    if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                      return Center(child: Text('暂无订货信息'));
-                    }
-
-                    final orders = snapshot.data!;
-                    return ListView.builder(
-                      itemCount: orders.length,
-                      itemBuilder: (context, index) {
-                        final order = orders[index];
-                        return CustomerOrderCard(
-                          order: order,
-                          refreshParent: () => _refreshNotifier?.value = !_refreshNotifier!.value,
-                        );
-                      },
-                    );
-                  },
-                );
+            flex: 1,
+            child: CustomerList(
+              selectedCustomerName: selectedCustomerName,
+              onCustomerSelected: (name) {
+                setState(() {
+                  selectedCustomerName = name;
+                });
+                _loadOrders();
               },
+            ),
+          ),
+          // 右侧订单列表
+          Expanded(
+            flex: 3,
+            child: OrderList(
+              orders: _orders,
+              refreshNotifier: _refreshNotifier!,
+              deleteOrderLocally: _deleteOrderLocally,
+              selectedCustomerName: selectedCustomerName,
             ),
           ),
         ],
@@ -118,25 +85,169 @@ class _CustomerOrdersScreenState extends State<CustomerOrdersScreen> {
   }
 }
 
+class CustomerList extends StatelessWidget {
+  final String? selectedCustomerName;
+  final Function(String?) onCustomerSelected;
+
+  const CustomerList({
+    super.key,
+    required this.selectedCustomerName,
+    required this.onCustomerSelected,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<List<String>>(
+      future: Provider.of<AppDatabase>(context).getAllCustomerNames(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        if (!snapshot.hasData || snapshot.data!.isEmpty) {
+          return const Center(child: Text('暂无客户信息'));
+        }
+
+        final customerNames = snapshot.data!;
+        return SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              OutlinedButton(
+                onPressed: () {
+                  onCustomerSelected(null);
+                },
+                child: const Text('全部'),
+              ),
+              ...customerNames.map((name) => OutlinedButton(
+                onPressed: selectedCustomerName == name ? null : () {
+                  onCustomerSelected(name);
+                },
+                style: ButtonStyle(
+                  backgroundColor: MaterialStateProperty.resolveWith(
+                    (states) => selectedCustomerName == name ? Colors.blue : Colors.grey,
+                  ),
+                  padding: MaterialStateProperty.all(const EdgeInsets.symmetric(vertical: 8, horizontal: 16)),
+                ),
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final textSpan = TextSpan(
+                      text: name,
+                      style: const TextStyle(color: Colors.white),
+                    );
+                    final textPainter = TextPainter(
+                      text: textSpan,
+                      textDirection: TextDirection.ltr,
+                    );
+                    textPainter.layout(maxWidth: constraints.maxWidth);
+                    if (textPainter.didExceedMaxLines) {
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            name,
+                            style: const TextStyle(color: Colors.white),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      );
+                    }
+                    return Text(
+                      name,
+                      style: const TextStyle(color: Colors.white),
+                    );
+                  },
+                ),
+              )),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class OrderList extends StatelessWidget {
+  final List<Order> orders;
+  final ValueNotifier<bool> refreshNotifier;
+  final Function(Order) deleteOrderLocally;
+  final String? selectedCustomerName;
+
+  const OrderList({
+    super.key,
+    required this.orders,
+    required this.refreshNotifier,
+    required this.deleteOrderLocally,
+    required this.selectedCustomerName,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(16),
+          color: Colors.grey[200],
+          child: Text(
+            '当前客户: ${selectedCustomerName ?? '全部'}',
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
+        ),
+        Expanded(
+          child: ValueListenableBuilder(
+            valueListenable: refreshNotifier,
+            builder: (context, _, __) {
+              if (orders.isEmpty) {
+                return const Center(child: Text('暂无订货信息'));
+              }
+              return ListView.builder(
+                itemCount: orders.length,
+                itemBuilder: (context, index) {
+                  final order = orders[index];
+                  return CustomerOrderCard(
+                    order: order,
+                    refreshParent: () => refreshNotifier.value = !refreshNotifier.value,
+                    deleteOrderLocally: deleteOrderLocally,
+                  );
+                },
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class CustomerOrderCard extends StatelessWidget {
   final Order order;
   final VoidCallback refreshParent;
+  final Function(Order) deleteOrderLocally;
 
-  const CustomerOrderCard({super.key, required this.order, required this.refreshParent});
+  const CustomerOrderCard({
+    super.key,
+    required this.order,
+    required this.refreshParent,
+    required this.deleteOrderLocally,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Card(
-      margin: EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+      margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
       elevation: 2,
       child: Padding(
-        padding: EdgeInsets.all(16),
+        padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // 突出显示客户姓名
             Text(
               '客户: ${order.customerName}',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
             ),
             SizedBox(height: 8),
             Row(
@@ -145,16 +256,18 @@ class CustomerOrderCard extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      // 突出显示货物名称
+                      Text('货物名称: ${order.itemName}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
+                      SizedBox(height: 4),
                       Text('下单日期: ${order.orderDate}'),
                       SizedBox(height: 4),
-                      Text('货物名称: ${order.itemName}'),
-                      SizedBox(height: 4),
-                      Text('数量: ${order.quantity} ${order.unit}'), // 支持浮点数
+                      // 突出显示数量和单位
+                      Text('数量: ${order.quantity} ${order.unit}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
                     ],
                   ),
                 ),
                 IconButton(
-                  icon: Icon(Icons.delete, color: Colors.red),
+                  icon: const Icon(Icons.delete, color: Colors.red),
                   onPressed: () => _deleteOrder(context, order),
                 ),
               ],
@@ -166,10 +279,16 @@ class CustomerOrderCard extends StatelessWidget {
   }
 
   Future<void> _deleteOrder(BuildContext context, Order order) async {
-    await Provider.of<AppDatabase>(context, listen: false).deleteOrder(order);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('订单已删除')),
-    );
-    refreshParent(); // 刷新父页面
+    try {
+      await Provider.of<AppDatabase>(context, listen: false).deleteOrder(order);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('订单已删除')),
+      );
+      deleteOrderLocally(order);
+      refreshParent();
+    } catch (e) {
+      // 可以添加详细的错误处理逻辑
+      print('删除订单信息出错: $e');
+    }
   }
 }

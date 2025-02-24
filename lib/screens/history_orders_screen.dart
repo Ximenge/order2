@@ -99,22 +99,79 @@ class HistoryOrderCard extends StatelessWidget {
 
   const HistoryOrderCard({super.key, required this.order, required this.refreshParent});
 
+  Future<void> _deleteOrder(BuildContext context, Order order) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text('确认删除'),
+          content: Text('是否删除该历史订单？'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: Text('取消'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: Text('确定'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed == true) {
+      await Provider.of<AppDatabase>(context, listen: false).physicalDeleteOrder(order);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('历史订单已删除')),
+      );
+      refreshParent();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Card(
       child: ListTile(
-        title: Text('客户: ${order.customerName}'),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // 突出显示客户姓名
+            Text(
+              '客户: ${order.customerName}',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
+            ),
+            // 突出显示货物名称
+            Text(
+              '货物名称: ${order.itemName}',
+              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 18),
+            ),
+          ],
+        ),
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text('下单日期: ${order.orderDate}'),
-            Text('货物名称: ${order.itemName}'),
-            Text('数量: ${order.quantity} ${order.unit}'), // 支持浮点数
+            // 突出显示数量和单位
+            Text(
+              '数量: ${order.quantity} ${order.unit}',
+              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 18),
+            ),
           ],
         ),
-        trailing: ElevatedButton(
-          onPressed: () => _restoreOrder(context, order),
-          child: Text('恢复订单'),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ElevatedButton(
+              onPressed: () => _restoreOrder(context, order),
+              child: Text('恢复订单'),
+            ),
+            SizedBox(width: 8),
+            IconButton(
+              icon: Icon(Icons.delete, color: Colors.red),
+              onPressed: () => _deleteOrder(context, order),
+            ),
+          ],
         ),
       ),
     );
