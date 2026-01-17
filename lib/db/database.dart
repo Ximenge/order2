@@ -21,7 +21,7 @@ class AppDatabase {
 
     return await openDatabase(
       path,
-      version: 6, // 增加版本号以应用来源字段
+      version: 7, // 增加版本号以应用删除时间字段
       onCreate: _createDB,
       onUpgrade: (db, oldVersion, newVersion) async {
         // 使用迁移助手执行数据库迁移
@@ -42,6 +42,7 @@ class AppDatabase {
         unit TEXT NOT NULL DEFAULT '',
         source TEXT NOT NULL DEFAULT '店1', /* 新增来源字段 */
         createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        deletedAt TEXT, /* 新增删除时间字段 */
         isDeleted INTEGER NOT NULL DEFAULT 0
       )
     ''');
@@ -117,7 +118,7 @@ class AppDatabase {
 
   Future<List<Order>> getDeletedOrders() async {
     final db = await instance.database;
-    final result = await db.query('orders', where: 'isDeleted = 1', orderBy: 'orderDate DESC');
+    final result = await db.query('orders', where: 'isDeleted = 1', orderBy: 'deletedAt DESC');
     return result.map((json) => Order.fromMap(json)).toList();
   }
 
@@ -138,6 +139,20 @@ class AppDatabase {
   Future<List<String>> getAllCustomerNames() async {
     final db = await instance.database;
     final result = await db.rawQuery('SELECT DISTINCT customerName FROM orders WHERE isDeleted = 0');
+    return result.map((row) => row['customerName'] as String).toList();
+  }
+
+  // 按来源获取客户名称列表
+  Future<List<String>> getCustomerNamesBySource(String? source) async {
+    final db = await instance.database;
+    if (source == null || source.isEmpty) {
+      // 如果来源为空，获取所有客户名称
+      return getAllCustomerNames();
+    }
+    final result = await db.rawQuery(
+      'SELECT DISTINCT customerName FROM orders WHERE isDeleted = 0 AND source = ?',
+      [source],
+    );
     return result.map((row) => row['customerName'] as String).toList();
   }
 
@@ -190,6 +205,34 @@ class AppDatabase {
     );
     return result.isNotEmpty;
   }
+  
+  // 新增方法：根据来源获取订单
+  Future<List<Order>> getOrdersBySource(String source) async {
+    final db = await instance.database;
+    final result = await db.query(
+      'orders',
+      where: 'source = ? AND isDeleted = 0',
+      whereArgs: [source],
+      orderBy: 'orderDate DESC',
+    );
+    
+    final List<Order> orders = List.generate(result.length, (index) => Order.fromMap(result[index]));
+    return orders;
+  }
+  
+  // 新增方法：根据客户名称和来源获取订单
+  Future<List<Order>> getOrdersByCustomerAndSource(String customerName, String source) async {
+    final db = await instance.database;
+    final result = await db.query(
+      'orders',
+      where: 'customerName = ? AND source = ? AND isDeleted = 0',
+      whereArgs: [customerName, source],
+      orderBy: 'orderDate DESC',
+    );
+    
+    final List<Order> orders = List.generate(result.length, (index) => Order.fromMap(result[index]));
+    return orders;
+  }
 
   Future<List<Map<String, dynamic>>> getItemStats({String? source}) async {
     final db = await instance.database;
@@ -236,7 +279,7 @@ class AppDatabase {
     final db = await instance.database;
     await db.update(
       'orders',
-      {'isDeleted': 1},
+      {'isDeleted': 1, 'deletedAt': DateTime.now().toIso8601String()}, // 设置删除时间
       where: 'id = ?',
       whereArgs: [order.id],
     );
@@ -246,7 +289,7 @@ class AppDatabase {
     final db = await instance.database;
     await db.update(
       'orders',
-      {'isDeleted': 0},
+      {'isDeleted': 0, 'deletedAt': null}, // 清除删除时间
       where: 'id = ?',
       whereArgs: [order.id],
     );

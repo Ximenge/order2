@@ -13,6 +13,9 @@ class DatabaseMigration {
         case 6:
           await _migrateToVersion6(db);
           break;
+        case 7:
+          await _migrateToVersion7(db);
+          break;
         // 未来版本可以在这里添加更多迁移
       }
     }
@@ -41,6 +44,17 @@ class DatabaseMigration {
       await txn.execute('ALTER TABLE orders ADD COLUMN source TEXT NOT NULL DEFAULT "店1"');
       // 添加来源索引以提高查询性能
       await txn.execute('CREATE INDEX IF NOT EXISTS idx_orders_source ON orders(source)');
+    });
+  }
+  
+  /// 迁移到版本7 - 添加删除时间字段
+  static Future<void> _migrateToVersion7(Database db) async {
+    // 使用事务执行字段添加操作
+    await db.transaction((txn) async {
+      // 添加删除时间字段，可为空
+      await txn.execute('ALTER TABLE orders ADD COLUMN deletedAt TEXT');
+      // 添加删除时间索引以提高查询性能
+      await txn.execute('CREATE INDEX IF NOT EXISTS idx_orders_deleted_at ON orders(deletedAt)');
     });
   }
 }

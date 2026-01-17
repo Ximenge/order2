@@ -8,6 +8,7 @@ class Order {
   final String unit;
   final String source;
   final int isDeleted;
+  final DateTime? deletedAt;
 
   // 使用const构造函数，允许对象被缓存
   const Order({
@@ -19,6 +20,7 @@ class Order {
     required this.unit,
     this.source = '店1',
     this.isDeleted = 0,
+    this.deletedAt,
   });
 
   // 优化的toMap方法，避免不必要的对象创建
@@ -38,6 +40,11 @@ class Order {
       map['id'] = id;
     }
     
+    // 只在deletedAt非空时添加，避免不必要的null值
+    if (deletedAt != null) {
+      map['deletedAt'] = deletedAt!.toIso8601String();
+    }
+    
     return map;
   }
 
@@ -52,6 +59,7 @@ class Order {
       unit: map['unit'] as String? ?? '',
       source: map['source'] as String? ?? '店1',
       isDeleted: map['isDeleted'] as int,
+      deletedAt: map['deletedAt'] != null ? DateTime.parse(map['deletedAt'] as String) : null,
     );
   }
   

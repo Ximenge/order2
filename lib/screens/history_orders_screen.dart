@@ -179,6 +179,17 @@ class HistoryOrderCard extends StatelessWidget {
               '数量: ${order.quantity} ${order.unit}',
               style: TextStyle(fontWeight: FontWeight.w600, fontSize: 18),
             ),
+            // 添加来源信息
+            Chip(
+              label: Text('来源: ${order.source}'),
+              backgroundColor: Colors.blue.withOpacity(0.2),
+              labelStyle: TextStyle(color: Colors.blue[800]),
+            ),
+            // 添加删除时间信息
+            Text(
+              '删除时间: ${order.deletedAt != null ? order.deletedAt.toString() : '未知'}',
+              style: TextStyle(color: Colors.grey[600]),
+            ),
           ],
         ),
         trailing: Row(
