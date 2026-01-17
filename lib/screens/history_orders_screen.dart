@@ -7,7 +7,7 @@ class HistoryOrdersScreen extends StatefulWidget {
   const HistoryOrdersScreen({super.key});
 
   @override
-  _HistoryOrdersScreenState createState() => _HistoryOrdersScreenState();
+  State<HistoryOrdersScreen> createState() => _HistoryOrdersScreenState();
 }
 
 class _HistoryOrdersScreenState extends State<HistoryOrdersScreen> {
@@ -46,12 +46,23 @@ class _HistoryOrdersScreenState extends State<HistoryOrdersScreen> {
       },
     );
 
-    if (confirmed == true) {
-      await Provider.of<AppDatabase>(context, listen: false).clearAllHistory();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('所有历史订单已清除')),
-      );
-      _refreshData();
+    if (confirmed == true && mounted) {
+      final appDatabase = Provider.of<AppDatabase>(context, listen: false);
+      try {
+        await appDatabase.clearAllHistory();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('所有历史订单已清除')),
+          );
+          _refreshData();
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('清除历史订单失败: ${e.toString()}')),
+          );
+        }
+      }
     }
   }
 
@@ -120,12 +131,23 @@ class HistoryOrderCard extends StatelessWidget {
       },
     );
 
-    if (confirmed == true) {
-      await Provider.of<AppDatabase>(context, listen: false).physicalDeleteOrder(order);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('历史订单已删除')),
-      );
-      refreshParent();
+    if (confirmed == true && context.mounted) {
+      final appDatabase = Provider.of<AppDatabase>(context, listen: false);
+      try {
+        await appDatabase.physicalDeleteOrder(order);
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('历史订单已删除')),
+          );
+          refreshParent();
+        }
+      } catch (e) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('删除历史订单失败: ${e.toString()}')),
+          );
+        }
+      }
     }
   }
 
@@ -178,10 +200,23 @@ class HistoryOrderCard extends StatelessWidget {
   }
 
   Future<void> _restoreOrder(BuildContext context, Order order) async {
-    await Provider.of<AppDatabase>(context, listen: false).restoreOrder(order);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('订单已恢复')),
-    );
-    refreshParent(); // 刷新父页面
+    if (context.mounted) {
+      final appDatabase = Provider.of<AppDatabase>(context, listen: false);
+      try {
+        await appDatabase.restoreOrder(order);
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('订单已恢复')),
+          );
+          refreshParent(); // 刷新父页面
+        }
+      } catch (e) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('恢复订单失败: ${e.toString()}')),
+          );
+        }
+      }
+    }
   }
 }

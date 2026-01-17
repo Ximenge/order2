@@ -6,12 +6,13 @@ import '../models/order.dart';
 import './stats_screen.dart';
 import '../customer_orders_screen.dart';
 import '../screens/history_orders_screen.dart';
+import '../utils/test_data_generator.dart'; // 导入测试数据生成器
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
   @override
-  _HomeScreenState createState() => _HomeScreenState();
+  State<HomeScreen> createState() => _HomeScreenState();
 }
 
 class _HomeScreenState extends State<HomeScreen> {
@@ -21,7 +22,7 @@ class _HomeScreenState extends State<HomeScreen> {
   final List<TextEditingController> _quantityControllers = [];
   final List<TextEditingController> _unitControllers = [];
   DateTime _selectedDate = DateTime.now();
-  ScrollController _scrollController = ScrollController();
+  final ScrollController _scrollController = ScrollController();
 
   Future<void> _selectDate(BuildContext context) async {
     final picked = await showDatePicker(
@@ -54,7 +55,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _submitForm() async {
-    if (_formKey.currentState!.validate()) {
+    if (_formKey.currentState != null && _formKey.currentState!.validate()) {
       List<Order> orders = [];
       for (int i = 0; i < _itemControllers.length; i++) {
         final itemName = _itemControllers[i].text;
@@ -77,30 +78,120 @@ class _HomeScreenState extends State<HomeScreen> {
       }
 
       try {
+        final appDatabase = Provider.of<AppDatabase>(context, listen: false);
         for (final order in orders) {
-          await Provider.of<AppDatabase>(context, listen: false).createOrder(order);
+          await appDatabase.createOrder(order);
         }
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('订单已保存')),
-        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('订单已保存')),
+          );
+        }
       } catch (e) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('保存订单失败')),
-        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('保存订单失败')),
+          );
+        }
       }
 
       _customerController.clear();
       _itemControllers.clear();
       _quantityControllers.clear();
       _unitControllers.clear();
-      setState(() => _selectedDate = DateTime.now());
+      setState(() {
+        _selectedDate = DateTime.now();
+        _addItemRow(); // 清空后添加一行空数据
+      });
+    }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    // 初始化时添加一行空数据
+    _addItemRow();
+  }
+
+  // 生成测试数据的方法
+  Future<void> _generateTestData() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('生成测试数据'),
+        content: const Text('确定要生成120个客户的测试数据吗？这将向数据库中添加大量记录。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('确定'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && mounted) {
+      final appDatabase = Provider.of<AppDatabase>(context, listen: false);
+      final generator = TestDataGenerator();
+      
+      try {
+        // 显示加载指示器
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => const AlertDialog(
+            title: Text('正在生成数据'),
+            content: SizedBox(
+              height: 50,
+              child: Center(child: CircularProgressIndicator()),
+            ),
+          ),
+        );
+        
+        // 生成120个客户，每个客户最多10个订单
+        await generator.generateTestData(
+          customerCount: 120,
+          maxOrdersPerCustomer: 10,
+          database: appDatabase,
+        );
+        
+        // 关闭加载指示器并显示成功消息
+        if (mounted) {
+          Navigator.pop(context); // 关闭加载指示器
+          
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('测试数据生成成功！')),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          Navigator.pop(context); // 关闭加载指示器
+          
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('生成测试数据失败: ${e.toString()}')),
+          );
+        }
+      }
     }
   }
 
   @override
   void dispose() {
     _scrollController.dispose();
+    _customerController.dispose();
+    for (var controller in _itemControllers) {
+      controller.dispose();
+    }
+    for (var controller in _quantityControllers) {
+      controller.dispose();
+    }
+    for (var controller in _unitControllers) {
+      controller.dispose();
+    }
     super.dispose();
   }
 
@@ -123,6 +214,12 @@ class _HomeScreenState extends State<HomeScreen> {
               context,
               MaterialPageRoute(builder: (context) => CustomerOrdersScreen()),
             ),
+          ),
+          // 测试数据生成按钮 - 仅用于开发测试
+          IconButton(
+            icon: Icon(Icons.developer_mode),
+            tooltip: '生成测试数据',
+            onPressed: _generateTestData,
           ),
           IconButton(
             icon: Icon(Icons.history),

@@ -85,7 +85,7 @@ class _CustomerOrdersScreenState extends State<CustomerOrdersScreen> {
   }
 }
 
-class CustomerList extends StatelessWidget {
+class CustomerList extends StatefulWidget {
   final String? selectedCustomerName;
   final Function(String?) onCustomerSelected;
 
@@ -96,75 +96,107 @@ class CustomerList extends StatelessWidget {
   });
 
   @override
+  State<CustomerList> createState() => _CustomerListState();
+}
+
+class _CustomerListState extends State<CustomerList> {
+  late ScrollController _scrollController;
+  List<String>? _cachedCustomerNames;
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController = ScrollController();
+    _loadCustomerNames();
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadCustomerNames() async {
+    try {
+      final names = await Provider.of<AppDatabase>(context, listen: false).getAllCustomerNames();
+      setState(() {
+        _cachedCustomerNames = names;
+        _isLoading = false;
+      });
+    } catch (e) {
+      print('加载客户名称出错: $e');
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return FutureBuilder<List<String>>(
-      future: Provider.of<AppDatabase>(context).getAllCustomerNames(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        }
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
 
-        if (!snapshot.hasData || snapshot.data!.isEmpty) {
-          return const Center(child: Text('暂无客户信息'));
-        }
+    if (_cachedCustomerNames == null || _cachedCustomerNames!.isEmpty) {
+      return const Center(child: Text('暂无客户信息'));
+    }
 
-        final customerNames = snapshot.data!;
-        return SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              OutlinedButton(
-                onPressed: () {
-                  onCustomerSelected(null);
-                },
-                child: const Text('全部'),
-              ),
-              ...customerNames.map((name) => OutlinedButton(
-                onPressed: selectedCustomerName == name ? null : () {
-                  onCustomerSelected(name);
-                },
-                style: ButtonStyle(
-                  backgroundColor: MaterialStateProperty.resolveWith(
-                    (states) => selectedCustomerName == name ? Colors.blue : Colors.grey,
-                  ),
-                  padding: MaterialStateProperty.all(const EdgeInsets.symmetric(vertical: 8, horizontal: 16)),
-                ),
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    final textSpan = TextSpan(
-                      text: name,
-                      style: const TextStyle(color: Colors.white),
-                    );
-                    final textPainter = TextPainter(
-                      text: textSpan,
-                      textDirection: TextDirection.ltr,
-                    );
-                    textPainter.layout(maxWidth: constraints.maxWidth);
-                    if (textPainter.didExceedMaxLines) {
-                      return Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            name,
-                            style: const TextStyle(color: Colors.white),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
-                      );
-                    }
-                    return Text(
-                      name,
-                      style: const TextStyle(color: Colors.white),
-                    );
-                  },
-                ),
-              )),
-            ],
+    return SingleChildScrollView(
+      controller: _scrollController,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          OutlinedButton(
+            onPressed: () {
+              widget.onCustomerSelected(null);
+            },
+            child: const Text('全部'),
           ),
-        );
-      },
+          ..._cachedCustomerNames!.map((name) => OutlinedButton(
+            onPressed: widget.selectedCustomerName == name ? null : () {
+              widget.onCustomerSelected(name);
+            },
+            style: ButtonStyle(
+              backgroundColor: MaterialStateProperty.resolveWith(
+                (states) => widget.selectedCustomerName == name ? Colors.blue : Colors.grey,
+              ),
+              padding: MaterialStateProperty.all(const EdgeInsets.symmetric(vertical: 8, horizontal: 16)),
+            ),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final textSpan = TextSpan(
+                  text: name,
+                  style: const TextStyle(color: Colors.white),
+                );
+                final textPainter = TextPainter(
+                  text: textSpan,
+                  textDirection: TextDirection.ltr,
+                );
+                textPainter.layout(maxWidth: constraints.maxWidth);
+                if (textPainter.didExceedMaxLines) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        name,
+                        style: const TextStyle(color: Colors.white),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  );
+                }
+                return Text(
+                  name,
+                  style: const TextStyle(color: Colors.white),
+                );
+              },
+            ),
+          )),
+        ],
+      ),
     );
   }
 }
@@ -285,10 +317,13 @@ class CustomerOrderCard extends StatelessWidget {
         const SnackBar(content: Text('订单已删除')),
       );
       deleteOrderLocally(order);
-      refreshParent();
+      // 移除refreshParent()调用，避免触发整体刷新
     } catch (e) {
       // 可以添加详细的错误处理逻辑
       print('删除订单信息出错: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('删除失败: ${e.toString()}')),
+      );
     }
   }
 }

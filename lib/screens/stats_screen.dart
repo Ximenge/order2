@@ -40,7 +40,7 @@ class StatsScreen extends StatelessWidget {
                         Expanded(
                           flex: 2,
                           child: Text(
-                            '${item['itemName']} (${unit})',
+                            '${item['itemName']} ($unit)',
                             style: TextStyle(
                               fontWeight: FontWeight.bold,
                               fontSize: 24,
