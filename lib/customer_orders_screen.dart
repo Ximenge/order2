@@ -295,6 +295,13 @@ class CustomerOrderCard extends StatelessWidget {
                       SizedBox(height: 4),
                       // 突出显示数量和单位
                       Text('数量: ${order.quantity} ${order.unit}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
+                      SizedBox(height: 4),
+                      // 新增来源信息显示
+                      Chip(
+                        label: Text('来源: ${order.source}'),
+                        backgroundColor: Colors.blue.withOpacity(0.2),
+                        labelStyle: TextStyle(color: Colors.blue[800]),
+                      ),
                     ],
                   ),
                 ),

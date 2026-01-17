@@ -21,7 +21,7 @@ class AppDatabase {
 
     return await openDatabase(
       path,
-      version: 5, // 增加版本号以应用新索引和hasCustomer方法
+      version: 6, // 增加版本号以应用来源字段
       onCreate: _createDB,
       onUpgrade: (db, oldVersion, newVersion) async {
         // 使用迁移助手执行数据库迁移
@@ -40,6 +40,7 @@ class AppDatabase {
         itemName TEXT NOT NULL,
         quantity REAL NOT NULL, /* 修改为 REAL 类型 */
         unit TEXT NOT NULL DEFAULT '',
+        source TEXT NOT NULL DEFAULT '店1', /* 新增来源字段 */
         createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
         isDeleted INTEGER NOT NULL DEFAULT 0
       )
@@ -50,6 +51,7 @@ class AppDatabase {
     await db.execute('CREATE INDEX idx_orders_orderDate ON orders(orderDate)');
     await db.execute('CREATE INDEX idx_orders_isDeleted ON orders(isDeleted)');
     await db.execute('CREATE INDEX idx_orders_customerDate ON orders(customerName, orderDate)');
+    await db.execute('CREATE INDEX idx_orders_source ON orders(source)'); /* 新增来源字段索引 */
   }
 
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
@@ -189,17 +191,45 @@ class AppDatabase {
     return result.isNotEmpty;
   }
 
-  Future<List<Map<String, dynamic>>> getItemStats() async {
+  Future<List<Map<String, dynamic>>> getItemStats({String? source}) async {
     final db = await instance.database;
+    String whereClause = 'isDeleted = 0';
+    List<String> whereArgs = [];
+    
+    if (source != null && source.isNotEmpty) {
+      whereClause += ' AND source = ?';
+      whereArgs.add(source);
+    }
+    
     return await db.rawQuery('''
       SELECT 
         itemName, 
         unit, 
         SUM(quantity) as total 
       FROM orders 
-      WHERE isDeleted = 0
+      WHERE $whereClause
       GROUP BY itemName, unit
-    ''');
+    ''', whereArgs);
+  }
+
+  // 获取某个货物的所有订单
+  Future<List<Order>> getOrdersByItem(String itemName, String unit, {String? source}) async {
+    final db = await instance.database;
+    String whereClause = 'itemName = ? AND unit = ? AND isDeleted = 0';
+    List<String> whereArgs = [itemName, unit];
+    
+    if (source != null && source.isNotEmpty) {
+      whereClause += ' AND source = ?';
+      whereArgs.add(source);
+    }
+    
+    final result = await db.query(
+      'orders',
+      where: whereClause,
+      whereArgs: whereArgs,
+      orderBy: 'source ASC, customerName ASC, orderDate DESC', // 按来源和客户名称排序
+    );
+    return result.map((json) => Order.fromMap(json)).toList();
   }
 
   Future<void> deleteOrder(Order order) async {

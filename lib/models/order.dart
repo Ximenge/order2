@@ -6,6 +6,7 @@ class Order {
   final String itemName;
   final double quantity;
   final String unit;
+  final String source;
   final int isDeleted;
 
   // 使用const构造函数，允许对象被缓存
@@ -16,6 +17,7 @@ class Order {
     required this.itemName,
     required this.quantity,
     required this.unit,
+    this.source = '店1',
     this.isDeleted = 0,
   });
 
@@ -27,6 +29,7 @@ class Order {
       'itemName': itemName,
       'quantity': quantity,
       'unit': unit,
+      'source': source,
       'isDeleted': isDeleted,
     };
     
@@ -47,6 +50,7 @@ class Order {
       itemName: map['itemName'] as String,
       quantity: (map['quantity'] as num).toDouble(),
       unit: map['unit'] as String? ?? '',
+      source: map['source'] as String? ?? '店1',
       isDeleted: map['isDeleted'] as int,
     );
   }
@@ -60,10 +64,11 @@ class Order {
            other.customerName == customerName &&
            other.itemName == itemName &&
            other.quantity == quantity &&
-           other.unit == unit;
+           other.unit == unit &&
+           other.source == source;
   }
   
   // 添加hashCode以支持集合操作
   @override
-  int get hashCode => Object.hash(id, customerName, itemName, quantity, unit);
+  int get hashCode => Object.hash(id, customerName, itemName, quantity, unit, source);
 }

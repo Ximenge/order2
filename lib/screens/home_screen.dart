@@ -22,7 +22,11 @@ class _HomeScreenState extends State<HomeScreen> {
   final List<TextEditingController> _quantityControllers = [];
   final List<TextEditingController> _unitControllers = [];
   DateTime _selectedDate = DateTime.now();
+  String _selectedSource = '店1'; // 新增来源选择状态，默认店1
   final ScrollController _scrollController = ScrollController();
+  
+  // 来源列表
+  final List<String> _sources = ['店1', '店2', '店3'];
 
   Future<void> _selectDate(BuildContext context) async {
     final picked = await showDatePicker(
@@ -72,6 +76,7 @@ class _HomeScreenState extends State<HomeScreen> {
             itemName: itemName,
             quantity: quantity,
             unit: unit,
+            source: _selectedSource, // 新增来源信息
           );
           orders.add(newOrder);
         }
@@ -269,6 +274,32 @@ class _HomeScreenState extends State<HomeScreen> {
                     ],
                   ),
                 ),
+              ),
+              SizedBox(height: 16),
+              // 新增来源选择下拉菜单
+              DropdownButtonFormField<String>(
+                value: _selectedSource,
+                decoration: InputDecoration(
+                  labelText: '来源',
+                  border: OutlineInputBorder(),
+                ),
+                items: _sources.map((String source) {
+                  return DropdownMenuItem<String>(
+                    value: source,
+                    child: Text(source),
+                  );
+                }).toList(),
+                onChanged: (String? newValue) {
+                  setState(() {
+                    _selectedSource = newValue!;
+                  });
+                },
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return '请选择来源';
+                  }
+                  return null;
+                },
               ),
               SizedBox(height: 16),
               ...List.generate(_itemControllers.length, (index) {
