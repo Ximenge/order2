@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:pinyin/pinyin.dart';
 import '../db/database.dart';
 import '../models/order.dart';
 
@@ -22,6 +23,9 @@ class _CustomerOrdersScreenState extends State<CustomerOrdersScreen> with Single
   
   // 为每个TAB创建独立的ScrollController
   Map<String, ScrollController> _scrollControllers = {};
+  
+  // 刷新标志，用于触发客户列表刷新
+  bool _refreshFlag = false;
 
   @override
   void initState() {
@@ -82,6 +86,18 @@ class _CustomerOrdersScreenState extends State<CustomerOrdersScreen> with Single
               .getOrdersByCustomerAndSource(selectedCustomerName!, _selectedSource);
         }
       }
+      
+      // 对订单进行排序：先按来源排序，再按订单日期排序
+      newOrders.sort((a, b) {
+        // 先比较来源
+        int sourceComparison = a.source.compareTo(b.source);
+        if (sourceComparison != 0) {
+          return sourceComparison;
+        }
+        // 如果来源相同，再按订单日期排序（最新的在前）
+        return b.orderDate.compareTo(a.orderDate);
+      });
+      
       setState(() {
         _orders = newOrders;
       });
@@ -108,16 +124,25 @@ class _CustomerOrdersScreenState extends State<CustomerOrdersScreen> with Single
           labelStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
         ),
         actions: [
-          // 添加刷新按钮
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: () {
-              // 点击刷新按钮时重新加载订单数据
-              _loadOrders();
-            },
-            tooltip: '刷新订单数据',
-          ),
-        ],
+            // 添加刷新按钮
+            IconButton(
+              icon: const Icon(Icons.refresh),
+              onPressed: () {
+                // 点击刷新按钮时重新加载所有数据
+                setState(() {
+                  // 清空客户列表缓存，确保重新加载所有来源的客户数据
+                  _CustomerListState._cachedCustomerNamesMap.clear();
+                  // 切换刷新标志，触发客户列表刷新
+                  _refreshFlag = !_refreshFlag;
+                });
+                // 重新加载订单数据
+                _loadOrders();
+                // 通知右侧订单列表刷新
+                _refreshNotifier?.value = !_refreshNotifier!.value;
+              },
+              tooltip: '刷新所有数据',
+            ),
+          ],
       ),
       body: Row(
         children: [
@@ -141,6 +166,7 @@ class _CustomerOrdersScreenState extends State<CustomerOrdersScreen> with Single
                   source: source, // 传入当前Tab对应的来源
                   // 传递当前Tab对应的ScrollController
                   scrollController: _scrollControllers[tab]!, 
+                  refreshFlag: _refreshFlag, // 传递刷新标志
                 );
               }).toList(),
             ),
@@ -166,6 +192,7 @@ class CustomerList extends StatefulWidget {
   final Function(String?) onCustomerSelected;
   final String? source; // 来源参数
   final ScrollController scrollController; // 外部ScrollController
+  final bool refreshFlag; // 刷新标志
 
   const CustomerList({
     super.key,
@@ -173,6 +200,7 @@ class CustomerList extends StatefulWidget {
     required this.onCustomerSelected,
     required this.source,
     required this.scrollController,
+    required this.refreshFlag,
   });
 
   @override
@@ -181,8 +209,9 @@ class CustomerList extends StatefulWidget {
 
 class _CustomerListState extends State<CustomerList> {
   // 为每个来源缓存独立的客户列表
-  Map<String?, List<String>> _cachedCustomerNamesMap = {};
+  static Map<String?, List<String>> _cachedCustomerNamesMap = {};
   bool _isLoading = true;
+  int _lastRefreshFlag = 0; // 用于跟踪刷新标志的变化
 
   @override
   void initState() {
@@ -211,13 +240,79 @@ class _CustomerListState extends State<CustomerList> {
         _loadCustomerNames();
       }
     }
+    
+    // 检查刷新标志是否变化
+    if (oldWidget.refreshFlag != widget.refreshFlag) {
+      // 刷新标志变化，重新加载数据
+      _isLoading = true;
+      _loadCustomerNames();
+    }
   }
 
   Future<void> _loadCustomerNames() async {
     try {
-      final names = await Provider.of<AppDatabase>(context, listen: false).getCustomerNamesBySource(widget.source);
+      final db = Provider.of<AppDatabase>(context, listen: false);
+      final names = await db.getCustomerNamesBySource(widget.source);
+      
+      // 获取每个客户的最早下单时间
+      Map<String, DateTime?> customerFirstOrderDates = {};
+      for (String name in names) {
+        customerFirstOrderDates[name] = await db.getCustomerFirstOrderDate(name);
+      }
+      
+      // 实现复杂的排序逻辑
+      names.sort((a, b) {
+        // 1. 按第一个字相同为最优先排序，把第一个字相同的用户名靠在一起
+        if (a.isNotEmpty && b.isNotEmpty && a[0] != b[0]) {
+          // 整体顺序按照首字的拼音字母顺序排列
+          String pinyinA = PinyinHelper.getShortPinyin(a[0]);
+          String pinyinB = PinyinHelper.getShortPinyin(b[0]);
+          int compare = pinyinA.compareTo(pinyinB);
+          if (compare != 0) {
+            return compare;
+          }
+        }
+        
+        // 2. 按拼音顺序排列，逐个比较每个字的拼音
+        int minLength = a.length < b.length ? a.length : b.length;
+        for (int i = 0; i < minLength; i++) {
+          if (a[i] != b[i]) {
+            String pinyinA = PinyinHelper.getShortPinyin(a[i]);
+            String pinyinB = PinyinHelper.getShortPinyin(b[i]);
+            int compare = pinyinA.compareTo(pinyinB);
+            if (compare != 0) {
+              return compare;
+            }
+          }
+        }
+        
+        // 3. 字少的在前，字多的在后
+        if (a.length != b.length) {
+          return a.length.compareTo(b.length);
+        }
+        
+        // 4. 如果拼音完全一样，则按照客户最早下单时间排名字顺序，早下单的排后面
+        DateTime? dateA = customerFirstOrderDates[a];
+        DateTime? dateB = customerFirstOrderDates[b];
+        if (dateA != null && dateB != null) {
+          // 早下单的排后面，所以用倒序
+          return dateB.compareTo(dateA);
+        }
+        if (dateA != null) {
+          // a有下单时间，b没有，b排在前面
+          return 1;
+        }
+        if (dateB != null) {
+          // b有下单时间，a没有，a排在前面
+          return -1;
+        }
+        
+        // 最后按默认字符串比较
+        return a.compareTo(b);
+      });
+      
       setState(() {
-        // 将客户列表缓存到对应的来源
+        // 将排序后的客户列表缓存到对应的来源
         _cachedCustomerNamesMap[widget.source] = names;
         _isLoading = false;
       });

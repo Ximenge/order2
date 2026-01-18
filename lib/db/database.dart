@@ -193,6 +193,21 @@ class AppDatabase {
     return result.map((row) => row['customerName'] as String).toList();
   }
 
+  // 获取客户的最早下单时间
+  Future<DateTime?> getCustomerFirstOrderDate(String customerName) async {
+    final db = await instance.database;
+    final result = await db.rawQuery('''
+      SELECT MIN(orderDate) as firstOrderDate 
+      FROM orders 
+      WHERE customerName = ? AND isDeleted = 0
+    ''', [customerName]);
+    
+    if (result.isNotEmpty && result[0]['firstOrderDate'] != null) {
+      return DateTime.parse(result[0]['firstOrderDate'] as String);
+    }
+    return null;
+  }
+
   // 新增方法：检查客户是否存在
   Future<bool> hasCustomer(String customerName) async {
     final db = await instance.database;
