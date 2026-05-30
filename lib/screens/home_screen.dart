@@ -6,11 +6,14 @@ import 'package:provider/provider.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:file_picker/file_picker.dart';
 import '../db/database.dart';
+import '../db/tribute_database.dart';
 import '../models/order.dart';
+import '../models/tribute_order.dart';
 import './stats_screen.dart';
+import './tribute_home_screen.dart';
 import '../customer_orders_screen.dart';
 import '../screens/history_orders_screen.dart';
-import '../utils/test_data_generator.dart'; // 导入测试数据生成器
+import '../utils/test_data_generator.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -273,19 +276,21 @@ class _HomeScreenState extends State<HomeScreen> {
         );
 
         final appDatabase = Provider.of<AppDatabase>(context, listen: false);
+        final tributeDb = TributeDatabase.instance;
         
-        // 获取所有订单数据
         final orders = await appDatabase.getAllOrders();
+        final tributeOrders = await tributeDb.getAllOrders();
         
-        // 准备导出数据结构
         final exportData = {
           'exportInfo': {
             'timestamp': DateTime.now().toIso8601String(),
-            'appVersion': '1.0.3',
-            'dataFormatVersion': '1.0',
-            'orderCount': orders.length
+            'appVersion': '1.1.0',
+            'dataFormatVersion': '1.1',
+            'orderCount': orders.length,
+            'tributeOrderCount': tributeOrders.length
           },
-          'orders': orders.map((order) => order.toMap()).toList()
+          'orders': orders.map((order) => order.toMap()).toList(),
+          'tributeOrders': tributeOrders.map((order) => order.toMap()).toList()
         };
         
         // 转换为JSON字符串
@@ -376,21 +381,18 @@ class _HomeScreenState extends State<HomeScreen> {
         }
         
         final appDatabase = Provider.of<AppDatabase>(context, listen: false);
+        final tributeDb = TributeDatabase.instance;
         final db = await appDatabase.database;
+        final tributeDbInstance = await tributeDb.database;
         
-        // 开始事务
         await db.transaction((txn) async {
-          // 清空现有数据
           await txn.delete('orders');
           
-          // 插入导入的订单数据
           final orders = importData['orders'] as List<dynamic>;
           for (final orderData in orders) {
-            // 确保id字段不被导入（使用自动生成）
             final orderMap = Map<String, dynamic>.from(orderData);
             orderMap.remove('id');
             
-            // 添加创建时间（如果不存在）
             if (!orderMap.containsKey('createdAt')) {
               orderMap['createdAt'] = DateTime.now().toIso8601String();
             }
@@ -398,6 +400,24 @@ class _HomeScreenState extends State<HomeScreen> {
             await txn.insert('orders', orderMap);
           }
         });
+        
+        if (importData.containsKey('tributeOrders')) {
+          await tributeDbInstance.transaction((txn) async {
+            await txn.delete('tribute_orders');
+            
+            final tributeOrders = importData['tributeOrders'] as List<dynamic>;
+            for (final orderData in tributeOrders) {
+              final orderMap = Map<String, dynamic>.from(orderData);
+              orderMap.remove('id');
+              
+              if (!orderMap.containsKey('createdAt')) {
+                orderMap['createdAt'] = DateTime.now().toIso8601String();
+              }
+              
+              await txn.insert('tribute_orders', orderMap);
+            }
+          });
+        }
         
         // 关闭加载指示器并显示成功消息
         if (mounted) {
@@ -422,6 +442,8 @@ class _HomeScreenState extends State<HomeScreen> {
                   Text('应用版本: ${exportInfo['appVersion']}'),
                   Text('数据格式版本: ${exportInfo['dataFormatVersion']}'),
                   Text('导入订单数: ${exportInfo['orderCount']}'),
+                  if (exportInfo['tributeOrderCount'] != null)
+                    Text('导入贡品订单数: ${exportInfo['tributeOrderCount']}'),
                 ],
               ),
               actions: [
@@ -480,14 +502,12 @@ class _HomeScreenState extends State<HomeScreen> {
               MaterialPageRoute(builder: (context) => CustomerOrdersScreen()),
             ),
           ),
-          // 测试数据生成按钮 - 根据_isTestButtonVisible条件显示
           if (_isTestButtonVisible)
             IconButton(
               icon: Icon(Icons.developer_mode),
               tooltip: '生成测试数据',
               onPressed: _generateTestData,
             ),
-
           IconButton(
             icon: Icon(Icons.history),
             onPressed: () => Navigator.push(
@@ -658,7 +678,26 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
               SizedBox(height: 24),
-              // 数据管理按钮组
+              OutlinedButton.icon(
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => TributeHomeScreen()),
+                ),
+                icon: Icon(Icons.card_giftcard),
+                label: Padding(
+                  padding: EdgeInsets.symmetric(vertical: 14),
+                  child: Text('贡品订货', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                ),
+                style: OutlinedButton.styleFrom(
+                  minimumSize: Size(double.infinity, 56),
+                  side: BorderSide(color: Colors.orange, width: 2),
+                  foregroundColor: Colors.orange,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+              SizedBox(height: 24),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
