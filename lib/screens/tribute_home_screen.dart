@@ -225,16 +225,16 @@ class _TributeHomeScreenState extends State<TributeHomeScreen> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   SizedBox(
-                    width: 48,
-                    height: 48,
+                    width: 64,
+                    height: 64,
                     child: IconButton(
                       onPressed: _decreaseAll,
                       icon: Icon(Icons.remove_circle_outline),
-                      iconSize: 32,
+                      iconSize: 42,
                       color: Colors.red,
                     ),
                   ),
-                  SizedBox(width: 8),
+                  SizedBox(width: 16),
                   OutlinedButton(
                     onPressed: _fillOneSet,
                     style: OutlinedButton.styleFrom(
@@ -246,14 +246,14 @@ class _TributeHomeScreenState extends State<TributeHomeScreen> {
                       style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
                     ),
                   ),
-                  SizedBox(width: 8),
+                  SizedBox(width: 16),
                   SizedBox(
-                    width: 48,
-                    height: 48,
+                    width: 64,
+                    height: 64,
                     child: IconButton(
                       onPressed: _increaseAll,
                       icon: Icon(Icons.add_circle_outline),
-                      iconSize: 32,
+                      iconSize: 42,
                       color: Colors.green,
                     ),
                   ),

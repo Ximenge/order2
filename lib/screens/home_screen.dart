@@ -284,7 +284,7 @@ class _HomeScreenState extends State<HomeScreen> {
         final exportData = {
           'exportInfo': {
             'timestamp': DateTime.now().toIso8601String(),
-            'appVersion': '1.1.0',
+            'appVersion': '1.1.1',
             'dataFormatVersion': '1.1',
             'orderCount': orders.length,
             'tributeOrderCount': tributeOrders.length
