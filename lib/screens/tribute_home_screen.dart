@@ -60,6 +60,26 @@ class _TributeHomeScreenState extends State<TributeHomeScreen> {
     });
   }
 
+  void _decreaseAll() {
+    setState(() {
+      for (var controller in _quantityControllers.values) {
+        final current = double.tryParse(controller.text) ?? 0;
+        final newVal = (current - 1).clamp(0, 99999);
+        controller.text = newVal == newVal.roundToDouble() ? newVal.toInt().toString() : newVal.toString();
+      }
+    });
+  }
+
+  void _increaseAll() {
+    setState(() {
+      for (var controller in _quantityControllers.values) {
+        final current = double.tryParse(controller.text) ?? 0;
+        final newVal = current + 1;
+        controller.text = newVal == newVal.roundToDouble() ? newVal.toInt().toString() : newVal.toString();
+      }
+    });
+  }
+
   Future<void> _submitForm() async {
     if (_formKey.currentState != null && _formKey.currentState!.validate()) {
       final customerName = _customerController.text.trim();
@@ -201,16 +221,43 @@ class _TributeHomeScreenState extends State<TributeHomeScreen> {
                 ),
               ),
               SizedBox(height: 24),
-              OutlinedButton.icon(
-                onPressed: _fillOneSet,
-                icon: Icon(Icons.checklist),
-                label: Padding(
-                  padding: EdgeInsets.symmetric(vertical: 12),
-                  child: Text('贡品一套'),
-                ),
-                style: OutlinedButton.styleFrom(
-                  minimumSize: Size(double.infinity, 50),
-                ),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  SizedBox(
+                    width: 48,
+                    height: 48,
+                    child: IconButton(
+                      onPressed: _decreaseAll,
+                      icon: Icon(Icons.remove_circle_outline),
+                      iconSize: 32,
+                      color: Colors.red,
+                    ),
+                  ),
+                  SizedBox(width: 8),
+                  OutlinedButton(
+                    onPressed: _fillOneSet,
+                    style: OutlinedButton.styleFrom(
+                      minimumSize: Size(0, 44),
+                      padding: EdgeInsets.symmetric(horizontal: 16),
+                    ),
+                    child: Text(
+                      '贡品一套',
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                  SizedBox(width: 8),
+                  SizedBox(
+                    width: 48,
+                    height: 48,
+                    child: IconButton(
+                      onPressed: _increaseAll,
+                      icon: Icon(Icons.add_circle_outline),
+                      iconSize: 32,
+                      color: Colors.green,
+                    ),
+                  ),
+                ],
               ),
               SizedBox(height: 16),
               Text(
