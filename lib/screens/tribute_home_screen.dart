@@ -235,15 +235,18 @@ class _TributeHomeScreenState extends State<TributeHomeScreen> {
                     ),
                   ),
                   SizedBox(width: 16),
-                  OutlinedButton(
-                    onPressed: _fillOneSet,
-                    style: OutlinedButton.styleFrom(
-                      minimumSize: Size(0, 44),
-                      padding: EdgeInsets.symmetric(horizontal: 16),
-                    ),
-                    child: Text(
-                      '贡品一套',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                  IgnorePointer(
+                    ignoring: true,
+                    child: OutlinedButton(
+                      onPressed: _fillOneSet,
+                      style: OutlinedButton.styleFrom(
+                        minimumSize: Size(0, 44),
+                        padding: EdgeInsets.symmetric(horizontal: 16),
+                      ),
+                      child: Text(
+                        '贡品一套',
+                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                      ),
                     ),
                   ),
                   SizedBox(width: 16),
